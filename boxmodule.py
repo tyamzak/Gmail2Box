@@ -15,8 +15,6 @@ COMPLETED_DATE_SET = set()
 with open('config.json','r',encoding='utf8') as f:
     js = json.load(f)
     slack_token = js["SLACK_TOKEN"]
-    SLACK_IRAISYO_STR = js["SLACK_IRAISYO_STR"]
-    SLACK_FEEDBACK_STR = js["SLACK_FEEDBACK_STR"]
     BOX_USER_ID = js["BOX_USER_ID"]
     SLACK_CHANNEL_NAMES = js["SLACK_CHANNEL_NAMES"]
     TIMEOUT = float(js["TIMEOUT"])
@@ -146,41 +144,27 @@ def hello_pubsub(event, context):
     main()
 
 def main():
+    #file_ids内のタイムスタンプからdatefoldernameを作成する
+    filedate = datetime.datetime.fromtimestamp(file['timestamp'],tz=JST)
+    date_folder_name = datetime.datetime(filedate.year,filedate.month,filedate.day,0,0,0,tzinfo=JST).strftime('%Y%m%d')
+    
+    for cnlname in SLACK_CHANNEL_NAMES:
+        res = get_items_from_box_folder(channel_folder_name=cnlname, date_folder_name=DATEFOLDERNAME,bl_folder_create=False)
+    print(res)
+    # TS_TOMORROW = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) + datetime.timedelta(days=1)).timestamp()
+    # TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
 
-    TS_TOMORROW = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) + datetime.timedelta(days=1)).timestamp()
-    TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
+    # #本日分を実施　完了記録は残さない　ワークフローの集計を実施しない
+    # ts_to = TS_TOMORROW
+    # ts_from = TS_TODAY
 
-    #本日分を実施　完了記録は残さない　ワークフローの集計を実施しない
-    ts_to = TS_TOMORROW
-    ts_from = TS_TODAY
-
-    #昨日以降分を実施 ワークフローの集計も実施していく
-    past_index = 0
+    # #昨日以降分を実施 ワークフローの集計も実施していく
+    # past_index = 0
     while True:
 
-        ts_to = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days=past_index)).timestamp()
-        ts_from  = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days= 1 + past_index)).timestamp()
+        DATEFOLDERNAME = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days= 1 + past_index).strftime('%Y%m%d')
 
-        if box_file_id[0]:
 
-            #SLACKからダウンロード候補リストを取得する
-            file_ids = slack_filelist_for_download(channels = channel_ids, ts_to = ts_to, ts_from = ts_from)
-            #BOXにアップロードする
-            file_upload_slack2box(file_ids)
-            #outdatedcount
-            outdatedcount = 0
-            for channel_id in channel_ids:
-                ts_oldest = [x[2] for x in slack_ids_names if x[1]==channel_id][0]
-                #作成日以前は探さない
-                if float(ts_oldest) <= float(ts_from) :
-                    slack_channel_messages = get_channel_messages(channel_id, ts_to = ts_to, ts_from = ts_from)
-                    make_workflow_csv(slack_channel_messages,channel_id,ts_from,ts_to)
-                else:
-                    outdatedcount += 1
-            
-            if outdatedcount == len(channel_ids):
-                logger.info("All Files are upload completed")
-                break
 
         past_index += 1
 
