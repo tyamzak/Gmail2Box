@@ -1,44 +1,15 @@
-import logging
-import os
-import time
-import pprint
-import sys
 from boxsdk import JWTAuth, Client
-
 from logging import getLogger, StreamHandler, DEBUG
-import datetime
+import logging
 import json
-STARTTIME = time.time()
-COMPLETED_ID = ""
-COMPLETED_DATE_SET = set()
+import os
 
 with open('config.json','r',encoding='utf8') as f:
     js = json.load(f)
-    slack_token = js["SLACK_TOKEN"]
+    GMAIL_IRAISYO_STR = js["GMAIL_IRAISYO_STR"]
     BOX_USER_ID = js["BOX_USER_ID"]
-    SLACK_CHANNEL_NAMES = js["SLACK_CHANNEL_NAMES"]
-    TIMEOUT = float(js["TIMEOUT"])
-
-
-
-
-logging.basicConfig()
-logger = getLogger(__name__)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
-t_delta = datetime.timedelta(hours=9)
-JST = datetime.timezone(t_delta, 'JST')
-now = datetime.datetime.now(JST)
-TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
-TS_YESTERDAY = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).timestamp()
-#デフォルトは昨日分アップロードなので、昨日分のフォルダを作る
-DATEFOLDERNAME = datetime.datetime(now.year,now.month,now.day - 1,0,0,0,tzinfo=JST).strftime('%Y%m%d')
-ROOT_FOLDER_NAME = 'SlackUpload'
-
-# グローバル　Dict構造　フォルダ名 : {"id":フォルダID, "items" : [] } "itemsの下層に別フォルダが入る"
-box_items = dict()
+    ROOT_FOLDER_NAME = js["ROOT_FOLDER_NAME"]
+    CHANNEL_FOLDER_NAME = js["CHANNEL_FOLDER_NAME"]
 
 ################BOXJWTクライアントを作成する#########################################jwt
 # auth = JWTAuth.from_settings_file(r'909811339_24cvqapp_config.json')
@@ -46,14 +17,26 @@ auth = JWTAuth.from_settings_file(r'box_jwt_auth_config.json')
 
 client = Client(auth)
 service_account = client.user().get()
-logger.info('Box Service Account user ID is {0}'.format(service_account.id))
+
 #別のユーザーとして処理を実行する
 user_to_impersonate = client.user(user_id=BOX_USER_ID)
 user_client = client.as_user(user_to_impersonate)
 
+##################################################################################
 
-
-
+def get_tmp_folder():
+    SAVEFOLDER = "/tmp"
+    import platform
+    pf = platform.system()
+    if pf == 'Windows':
+        if not os.path.exists("save_folder"):
+            os.mkdir("save_folder")
+        SAVEFOLDER = 'save_folder'
+    elif pf == 'Darwin':
+        SAVEFOLDER = "/tmp"
+    elif pf == 'Linux':
+        SAVEFOLDER = "/tmp"
+    return SAVEFOLDER
 
 def find_and_create_folder(parent_folder_id:str, child_name:str, bl_folder_create=True) -> str:
 
@@ -87,8 +70,7 @@ def find_and_create_folder(parent_folder_id:str, child_name:str, bl_folder_creat
         return False
 
 
-###################################boxファイルのリストアップ##################################
-def get_items_from_box_folder(channel_folder_name:str,date_folder_name:str="",root_folder_name:str='SlackUpload', bl_folder_create:bool=True)->dict:
+def get_items_from_box_folder(channel_folder_name:str,date_folder_name:str,root_folder_name:str, bl_folder_create:bool=True)->dict:
     """グローバル変数のbox_itemsを更新していく
         BOX内にroot-チャンネル名-日付-(アイテム)というフォルダ構造を作成し、
         既に存在する場合は、最下層フォルダ内のファイル情報を格納する
@@ -135,39 +117,94 @@ def get_items_from_box_folder(channel_folder_name:str,date_folder_name:str="",ro
         print(e.message)
         return False
 
+def make_workflow_csv(gmail_messages, TS_YESTERDAY,TS_TODAY):
+   
+    #依頼書の格納リスト
+
+    iraisyolist = []
+    # if not SLACK_IRAISYO_STR:
+    #     SLACK_IRAISYO_STR = '*依頼書*を送信しました'
 
 
+    #フィードバックの格納リスト
+    feedbacklist = []
+    #フィードバック認識する文字列
+    # if not SLACK_FEEDBACK_STR:
+    #     SLACK_FEEDBACK_STR = '*フィードバック*を送信しました' 
+
+    for message in gmail_messages:
+
+        if GMAIL_IRAISYO_STR in message['text']:
+            #認識文字列の検索　=> 項目検索中　=>　項目の値取得中　=>　項目検索中
+            state = 0
+            key = ''
+            value = ''
+            dictforiraicsv = dict()
+
+            #項目の取得
+            for line in message['text'].split("/r"):
+                #認識文字列の検索
+                if state == 0:
+                    if GMAIL_IRAISYO_STR in line:
+                        state = 1
+                #項目検索中
+                elif state == 1:
+                    if ':' in line:
+                        string_splitted = line.split(':')
+                        key = line[0]
+                        dictforiraicsv[key] =line[1]
+                        state = 2
+                #項目の値取得中
+                elif state == 2:
+                    if line != '':
+                        dictforiraicsv[key] = dictforiraicsv[key] + line
+                    # else:
+                        key = ''
+                        value = ''
+                        state = 1
+            iraisyolist.append(dictforiraicsv)
 
 
+    #iraisyolistもしくはfeedbacklistが空だった場合は終了する
+    if not iraisyolist:
+        return False
 
-def hello_pubsub(event, context):
-    main()
+    import pandas as pd
 
-def main():
-    #file_ids内のタイムスタンプからdatefoldernameを作成する
-    filedate = datetime.datetime.fromtimestamp(file['timestamp'],tz=JST)
+    #channel_idからchannel_folder_nameを作成する
+
+    #TS_YESTERDAYのタイムスタンプからdatefoldernameを作成する
+    import datetime
+    t_delta = datetime.timedelta(hours=9)
+    JST = datetime.timezone(t_delta, 'JST')
+    filedate = datetime.datetime.fromtimestamp(TS_YESTERDAY,tz=JST)
     date_folder_name = datetime.datetime(filedate.year,filedate.month,filedate.day,0,0,0,tzinfo=JST).strftime('%Y%m%d')
+
+    if not box_items:
+        box_items = get_items_from_box_folder(channel_folder_name=CHANNEL_FOLDER_NAME,date_folder_name=date_folder_name,root_folder_name=ROOT_FOLDER_NAME)
+
+
+    if not CHANNEL_FOLDER_NAME in box_items[ROOT_FOLDER_NAME]["items"].keys():
+        box_items = get_items_from_box_folder(channel_folder_name=CHANNEL_FOLDER_NAME,date_folder_name=date_folder_name,root_folder_name=ROOT_FOLDER_NAME)
+
+
+    #date_folder_nameの存在確認を行う
+    if not date_folder_name in box_items[ROOT_FOLDER_NAME]["items"][CHANNEL_FOLDER_NAME]["items"].keys():
+        #存在しなければ、取得もしくは作成を行う
+        box_items = get_items_from_box_folder(channel_folder_name=CHANNEL_FOLDER_NAME,date_folder_name=date_folder_name,root_folder_name=ROOT_FOLDER_NAME)
+
+
+
+    id_datefolder = box_items['SlackUpload']['items'][CHANNEL_FOLDER_NAME]['items'][date_folder_name]['id']
+
+    #TODO ファイルの存在確認を行う
     
-    for cnlname in SLACK_CHANNEL_NAMES:
-        res = get_items_from_box_folder(channel_folder_name=cnlname, date_folder_name=DATEFOLDERNAME,bl_folder_create=False)
-    print(res)
-    # TS_TOMORROW = (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) + datetime.timedelta(days=1)).timestamp()
-    # TS_TODAY = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST).timestamp()
+    if not "iraisyo.csv" in box_items[ROOT_FOLDER_NAME]['items'][CHANNEL_FOLDER_NAME]['items'][date_folder_name]['items'].keys():
+        # Google Cloud Function用
+        if iraisyolist:
+            ircsv = pd.DataFrame(iraisyolist)
+            ircsv.to_csv(get_tmp_folder() + '/' + 'iraisyo.csv',index=False, header=True)
+            new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'iraisyo.csv')
+            print(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
 
-    # #本日分を実施　完了記録は残さない　ワークフローの集計を実施しない
-    # ts_to = TS_TOMORROW
-    # ts_from = TS_TODAY
-
-    # #昨日以降分を実施 ワークフローの集計も実施していく
-    # past_index = 0
-    while True:
-
-        DATEFOLDERNAME = datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days= 1 + past_index).strftime('%Y%m%d')
-
-
-
-        past_index += 1
-
-
-if __name__ == "__main__":
-    main()
+    return True

@@ -1,3 +1,6 @@
 venv
 config.json
 box_jwt_auth_config.json
+credentials.json
+token.json
+credentials/client_secret_717769670068-petrdlsv2blg4ilcr596qo8t8ds9baki.apps.googleusercontent.com.json
