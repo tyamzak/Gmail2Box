@@ -1,14 +1,5 @@
 from __future__ import print_function
 
-
-import os.path
-import base64
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-
 def get_message_list(message_json, dtfrom,dtto):
     import datetime
 
@@ -93,6 +84,7 @@ def hello_get(request):
             boxmodule.make_workflow_csv(lis,dt_from.timestamp())
 
         # res = api.apply_labels_to_massage_list(labelid_before,labelid_until,lis)
+        print(date_folder_name)
         past_index += 1
         if (datetime.datetime(now.year,now.month,now.day,0,0,0,tzinfo=JST) - datetime.timedelta(days= 1 + past_index)) < \
             datetime.datetime(2022,7,28,0,0,0,tzinfo=JST):

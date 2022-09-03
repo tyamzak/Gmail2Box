@@ -4,3 +4,8 @@ box_jwt_auth_config.json
 credentials.json
 token.json
 credentials/client_secret_717769670068-petrdlsv2blg4ilcr596qo8t8ds9baki.apps.googleusercontent.com.json
+__pycache__/app.cpython-39.pyc
+credentials/credentials.json.old
+save_folder/iraisyo.csv
+credentials/test_config.json
+__pycache__/boxmodule.cpython-39.pyc
