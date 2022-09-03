@@ -1,0 +1,86 @@
+
+function getMailInfo(gmailSearchString) {
+  let mails = []
+  // 検索文字列でヒットした一覧(スレッド)をサーチする
+  const threads = GmailApp.search(gmailSearchString); 
+
+
+  threads.forEach(thread => { 
+    const messages = thread.getMessages()
+    messages.forEach( message => {
+      const mailInfo = {
+        "id" : message.getId(),
+        "date" : message.getDate(),
+        "body" : message.getPlainBody()
+      }
+      mails.push(mailInfo)
+    })})
+    
+  return mails
+
+}
+
+
+//ラベルのついたメールを全て取得する
+function main() {
+  //昨日以前のものを取得
+  const idToken = ScriptApp.getIdentityToken()
+
+  const gmailSearchString = "label:boxアップロード待ち older_than:1d";
+  const mailInfos = getMailInfo(gmailSearchString);
+  mailInfos.forEach(mailInfo => {
+    Logger.log(mailInfo)
+  })
+  const http_res = myFunction(mailInfos);
+  const res = addToThreadSample("boxアップロード済", "boxアップロード待ち")
+  Logger.log(res)
+}
+
+//httpリクエストを送り、終了を確認する
+function myFunction(bodyMessage) {
+
+  var json_text = JSON.stringify(bodyMessage);
+  
+  //APIのリクエストでPOSTデータするパラメーターを設定する
+  let payload = json_text;
+
+
+  //HTTP POSTで前述で設定したパラメーターをオプションで設定する。
+  var options =
+  {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      Authorization: `Bearer ${ScriptApp.getIdentityToken()}`
+    },
+    "payload" : payload
+  };
+  
+  Logger.log(options)
+
+  const url = "https://us-central1-gmail-box-361017.cloudfunctions.net/function-1"
+
+  const res = UrlFetchApp.fetch(url, options)
+  contenttext = res.getContentText()
+  console.log(res.getContentText()) // Hello World!
+}
+
+
+//ラベルの付いたメールのラベルを付け替える
+//なお、本日分を除く
+function addToThreadSample(new_label_name, old_label_name) {
+
+  //古いラベルで昨日以前を検索し
+  const gmailSearchString = "label:" + old_label_name + " older_than:1d";
+  const threads = GmailApp.search(gmailSearchString);
+
+  // スレッドにラベルを付ける
+  var newlabel = GmailApp.getUserLabelByName(new_label_name);
+  newlabel.addToThreads(threads);
+
+  const oldlabel = GmailApp.getUserLabelByName(old_label_name);
+  oldlabel.removeFromThreads(threads)
+  
+
+  return true
+}
