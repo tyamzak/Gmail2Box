@@ -9,3 +9,7 @@ credentials/credentials.json.old
 save_folder/iraisyo.csv
 credentials/test_config.json
 __pycache__/boxmodule.cpython-39.pyc
+test_box_jwt_auth_config.json
+ladline_config.json
+ladline_box_jwt_auth_config.json
+構築手順20220831.rtf

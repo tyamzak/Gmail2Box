@@ -40,19 +40,19 @@ def get_message_list(message_json, dtfrom,dtto):
 
 
 
-# ########本番用#######################
-# import functions_framework
-# @functions_framework.http
-# def hello_get(request):
-# ###############################
+########本番用#######################
+import functions_framework
+@functions_framework.http
+def hello_get(request):
+###############################
 
-#########ngrokテスト用#######################
-from flask import Flask, request
-app = Flask(__name__)
-@app.route('/', methods=['GET','POST'])
-def hello_get():
-    print('get')
-################################
+# #########ngrokテスト用#######################
+# from flask import Flask, request
+# app = Flask(__name__)
+# @app.route('/', methods=['GET','POST'])
+# def hello_get():
+#     print('get')
+# ################################
 
 # def main(): # ローカル用途    
     import json
@@ -103,5 +103,5 @@ def hello_get():
             print('all days are completed')
             return "done"
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# if __name__ == "__main__":
+#     app.run(debug=True)

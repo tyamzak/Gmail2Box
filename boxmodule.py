@@ -126,26 +126,42 @@ def make_workflow_csv(gmail_messages, TS_YESTERDAY):
             dictforiraicsv = dict()
 
             #項目の取得
-            for line in message['message'].split("\n"):
+            for line in message['message'].replace("\r","").split("\n"):
                 #認識文字列の検索
                 if state == 0:
                     if GMAIL_IRAISYO_STR in line:
                         state = 1
+                        #この行は処理対象外
+                        continue
+                #:があったら1に戻し、空行だったらつぎにまわす
+                if ':' in line:
+                    state = 1
+                    key = ''
+                    value = ''
+                elif line:
+                    pass
+                else:
+                    continue
+
                 #項目検索中
-                elif state == 1:
-                    if ':' in line:
-                        string_splitted = re.split('[:]',line)
-                        key = string_splitted[0]
-                        dictforiraicsv[key] =string_splitted[1]
-                        state = 2
+                if state == 1:
+                        try:
+                            string_splitted = re.split('[:]',line)
+                            key = string_splitted[0]
+                            dictforiraicsv[key] =string_splitted[1]
+                            state = 2
+                        except IndexError:
+                            print('不正な文字　:文字の前がkeyとして使えない文字です')
+  
+
                 #項目の値取得中
                 elif state == 2:
                     if line != '':
-                        dictforiraicsv[key] = dictforiraicsv[key] + line
-                    # else:
-                        key = ''
-                        value = ''
-                        state = 1
+                        try:
+                            dictforiraicsv[key] = dictforiraicsv[key] + line
+                        except KeyError:
+                            print(f'Keyに出来ない文字です {key}')
+
             iraisyolist.append(dictforiraicsv)
 
 
@@ -186,4 +202,8 @@ def make_workflow_csv(gmail_messages, TS_YESTERDAY):
             new_file = user_client.folder(folder_id=id_datefolder).upload(get_tmp_folder() + '/' + 'iraisyo.csv')
             print(f'File "{new_file.name}" uploaded to Box with file ID {new_file.id}')
 
-    return True
+            return f'Success File "{new_file.name}" uploaded to Box with file ID {new_file.id}'
+        else:
+            return False
+    else:
+        return f'iraisyo.csv is already in {date_folder_name}'
